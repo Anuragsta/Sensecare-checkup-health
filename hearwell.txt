@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HearWell Pro - Hearing Test & Report</title>
+<style>
+  body {
+    font-family: "Poppins", sans-serif;
+    background: #f3f4f6;
+    text-align: center;
+    margin: 0;
+  }
+  h1 {
+    background: #4f46e5;
+    color: white;
+    padding: 15px;
+    margin: 0;
+  }
+  .card {
+    background: white;
+    width: 90%;
+    max-width: 420px;
+    margin: 25px auto;
+    padding: 25px;
+    border-radius: 14px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  }
+  button {
+    border: none;
+    color: white;
+    font-weight: 600;
+    border-radius: 8px;
+    padding: 12px 20px;
+    margin: 8px;
+    cursor: pointer;
+    transition: 0.3s;
+  }
+  .startBtn { background: #4f46e5; }
+  .cantHearBtn { background: #9333ea; }
+  button:hover { opacity: 0.85; transform: scale(1.05); }
+
+  #status { font-size: 1.1em; font-weight: 500; margin-top: 10px; }
+  .good { color: green; }
+  .bad { color: red; }
+
+  .result-card {
+    margin-top: 25px;
+    background: #e0e7ff;
+    border-radius: 10px;
+    padding: 15px;
+    display: none;
+  }
+  .precautions {
+    text-align: left;
+    margin: 10px 0;
+  }
+</style>
+</head>
+<body>
+  <h1>🎧 HearWell Pro - Smart Hearing Test</h1>
+
+  <div class="card">
+    <h2>👂 Step-by-step Frequency Test</h2>
+    <button id="startTest" class="startBtn">Start Hearing Test</button>
+    <button id="cantHear" class="cantHearBtn">I cannot hear this</button>
+    <p id="status">Press "Start Hearing Test" to begin.</p>
+
+    <div id="result" class="result-card">
+      <h3>🧾 Test Result</h3>
+      <p id="resultText"></p>
+      <div class="precautions" id="precautions"></div>
+      <p><strong>Issued by:</strong> HearWell AI Health System</p>
+      <p><em>Date: <span id="date"></span></em></p>
+    </div>
+  </div>
+
+  <footer style="margin-top:20px;color:#6b7280;">💡 Tip: Use headphones for accuracy.</footer>
+
+<script>
+  const statusText = document.getElementById("status");
+  const resultCard = document.getElementById("result");
+  const resultText = document.getElementById("resultText");
+  const precautionsBox = document.getElementById("precautions");
+  const dateField = document.getElementById("date");
+
+  const freqs = [500, 1000, 2000, 4000];
+  let responses = {};
+  let currentFreq = null;
+  let testRunning = false;
+  
+  function say(msg){
+  const s = new SpeechSynthesisUtterance(msg);
+  s.lang="en-IN"; 
+  s.rate=1.0; // medium pace voice
+  window.speechSynthesis.speak(s);
+}
+
+
+  function playTone(freq, duration=3){
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.value = freq;
+    osc.type = "sine";
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    osc.start();
+    osc.stop(ctx.currentTime + duration);
+  }
+
+  async function runTest(){
+    if(testRunning) return;
+    testRunning = true;
+    responses = {};
+    resultCard.style.display="none";
+    statusText.textContent = "Starting hearing test...";
+
+    for (let i=0; i<freqs.length; i++){
+      const f = freqs[i];
+      currentFreq = f;
+      responses[f] = true; // assume heard, will change if user clicks can't
+      await new Promise(r=>setTimeout(r,1000)); 
+      statusText.textContent = `🔊 Playing ${f} Hz tone...`;
+      playTone(f,3);
+      await new Promise(r=>setTimeout(r,3500));
+    }
+
+    showResult();
+    testRunning = false;
+  }
+
+  function cannotHear(){
+    if(currentFreq){
+      responses[currentFreq] = false;
+      statusText.textContent = `❗ You reported that you can't hear ${currentFreq} Hz tone.`;
+    }
+  }
+
+  function showResult(){
+    statusText.textContent = "✅ Test complete!";
+    resultCard.style.display = "block";
+    dateField.textContent = new Date().toLocaleString();
+
+    const heardAll = Object.values(responses).every(v => v === true);
+
+    if(heardAll){
+      resultText.innerHTML = "🎉 <b>Excellent hearing detected!</b>";
+      resultText.className="good";
+      precautionsBox.innerHTML = `
+        <ul>
+          <li>Avoid exposure to loud sounds for long durations.</li>
+          <li>Use ear protection in noisy environments.</li>
+          <li>Maintain clean ears and healthy habits.</li>
+        </ul>`;
+      say("Excellent hearing detected. Great job!");
+    } else {
+      resultText.innerHTML = "⚠️ <b>Possible hearing difficulty detected.</b>";
+      resultText.className="bad";
+      precautionsBox.innerHTML = `
+        <ul>
+          <li>Reduce earphone or loudspeaker volume.</li>
+          <li>Avoid inserting objects into your ears.</li>
+          <li>Consult an ENT doctor for a detailed checkup.</li>
+        </ul>`;
+      say("Possible hearing difficulty detected. Please consult an ear specialist soon.");
+    }
+  }
+
+  document.getElementById("startTest").addEventListener("click", runTest);
+  document.getElementById("cantHear").addEventListener("click", cannotHear);
+</script>
+</body>
+</html>
+

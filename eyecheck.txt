@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EyeCheck Test</title>
+  <style>
+    body {
+      background: #eaf6ff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      flex-direction: column;
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+    h1 {
+      color: #0077cc;
+    }
+    #letter {
+      font-weight: bold;
+      margin: 40px;
+      color: #000;
+      text-align: center;
+      font-size: 150px;
+    }
+    button {
+      background: #0077cc;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 5px;
+    }
+    button:hover {
+      background: #005fa3;
+    }
+    #result {
+      margin-top: 20px;
+      font-size: 18px;
+    }
+  </style>
+</head>
+<body>
+  <h1>👁️ EyeCheck Vision Test</h1>
+  <div id="letter">E</div>
+  <div>
+    <button onclick="startTest()">Start Test</button>
+    <button onclick="cannotSee()">I cannot see</button>
+  </div>
+  <div id="result"></div>
+
+  <script>
+    const letters = "E F P T O Z L P E D P E C F D".split(" ");
+    let index = 0;
+    let fontSize = 150;
+    let interval;
+    let canSeeAll = true;
+
+    const letterDiv = document.getElementById("letter");
+    const resultDiv = document.getElementById("result");
+
+    function speak(text) {
+      const speech = new SpeechSynthesisUtterance(text);
+      speech.lang = "en-US";
+      speech.rate = 1;
+      speech.pitch = 1;
+      window.speechSynthesis.speak(speech);
+    }
+
+    function startTest() {
+      index = 0;
+      fontSize = 150;
+      canSeeAll = true;
+      letterDiv.style.fontSize = fontSize + "px";
+      resultDiv.innerHTML = "";
+      clearInterval(interval);
+
+      // Medium speed: 1.5s per letter
+      interval = setInterval(() => {
+        letterDiv.textContent = letters[index];
+        letterDiv.style.fontSize = fontSize + "px";
+        fontSize -= 10;
+        if (fontSize <= 30) fontSize = 30; // Stop shrinking
+
+        index++;
+        if (index >= letters.length) {
+          clearInterval(interval);
+          showResult();
+        }
+      }, 1500);
+    }
+
+    function cannotSee() {
+      canSeeAll = false;
+      clearInterval(interval);
+      showResult();
+    }
+
+    function showResult() {
+      let message = "";
+      if (canSeeAll) {
+        message = "✅ Perfect Vision! You seem to have good eyesight. Maintain regular screen breaks and eye exercises.";
+        resultDiv.style.color = "green";
+        speak("Great! You have perfect vision. Keep your eyes healthy by taking screen breaks and blinking often.");
+      } else {
+        message = "⚠️ Vision Alert! Some letters were unclear. Please consult an eye specialist soon for better care.";
+        resultDiv.style.color = "red";
+        speak("Warning! It seems your vision needs attention. Please consult an eye specialist soon.");
+      }
+      resultDiv.innerHTML = message;
+      letterDiv.textContent = "👁️";
+      letterDiv.style.fontSize = "100px";
+    }
+  </script>
+</body>
+</html>

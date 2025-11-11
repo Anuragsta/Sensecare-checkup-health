@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SenseCare — AI Wellness Analyzer</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>👩‍⚕️ SenseCare</h1>
+    <p class="lead">AI-Based Early Wellness Analyzer</p>
+
+    <div class="cards">
+      <a href="hearwell.html" class="card">
+        <h2>👂 HearWell</h2>
+        <p>Quick hearing test using tone frequencies.</p>
+      </a>
+      <a href="eyecheck.html" class="card">
+        <h2>👁 EyeCheck</h2>
+        <p>Simple eye vision & color blindness test.</p>
+      </a>
+      <a href="sleepwell.html" class="card">
+        <h2>💤 WellSleep</h2>
+        <p>Check sleep habits and get improvement tips.</p>
+      </a>
+      <a href="posture.html" class="card">
+        <h2>💪 SitRight</h2>
+        <p>Posture monitor using AI and webcam.</p>
+      </a>
+    </div>
+
+    <footer>
+      Made by <strong><b><i>TEAM IRON</i></b></strong> for HACKATHON🚀
+    </footer>
+  </div>
+</body>
+</html>

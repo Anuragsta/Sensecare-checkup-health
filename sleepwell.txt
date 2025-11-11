@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>SleepWell — Sleep Analyzer (SenseCare)</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    .module { padding: 18px; margin-top: 18px; text-align:left; }
+    label { display:block; margin-top:10px; font-weight:600; }
+    input, select { padding:8px 10px; border-radius:8px; border:1px solid #ddd; width:100%; max-width:320px; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:8px; }
+    .btn { padding:10px 14px; border-radius:10px; border:0; cursor:pointer; background:#10b981; color:white; font-weight:700; }
+    .btn.gray { background:#64748b; }
+    table { width:100%; border-collapse:collapse; margin-top:12px; }
+    th, td { padding:8px 10px; border-bottom:1px solid #eee; text-align:left; font-size:14px; }
+    .summary { margin-top:12px; padding:12px; background:#fbfdff; border-radius:10px; border:1px solid #eef6ff; }
+    .small { color:#666; font-size:13px; }
+    .export { margin-left:8px; background:#2563eb; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>💤 SleepWell</h1>
+    <p class="lead">Log your sleep quickly and get instant feedback on duration, consistency and tips to improve sleep hygiene.</p>
+
+    <div class="module">
+      <h3>Log Sleep</h3>
+
+      <label for="sleepDate">Date (night of):</label>
+      <input type="date" id="sleepDate" />
+
+      <label for="bedTime">Bedtime (hh:mm, 24h)</label>
+      <input type="time" id="bedTime" />
+
+      <label for="wakeTime">Wake time (hh:mm, 24h)</label>
+      <input type="time" id="wakeTime" />
+
+      <label for="refresh">How refreshed do you feel? (0 = awful, 10 = great)</label>
+      <input type="number" id="refresh" min="0" max="10" value="6" />
+
+      <div class="row" style="margin-top:12px">
+        <button id="addLog" class="btn">Add Log</button>
+        <button id="clearAll" class="btn gray">Clear History</button>
+        <button id="exportCsv" class="btn export">Export CSV</button>
+        <a href="index.html" style="margin-left:auto;align-self:center;text-decoration:none;color:#2563eb">Back to Home</a>
+      </div>
+
+      <div id="instant" class="summary" style="display:none"></div>
+    </div>
+
+    <div class="module">
+      <h3>History</h3>
+      <div class="small">Saved locally in your browser. Use export to download CSV.</div>
+      <table id="historyTable">
+        <thead>
+          <tr><th>Date</th><th>Bed</th><th>Wake</th><th>Duration</th><th>Ref</th><th>Actions</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <div id="stats" class="summary" style="display:none"></div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // Utilities
+  function parseTimeToMinutes(timeStr) {
+    // timeStr format "HH:MM"
+    if(!timeStr) return null;
+    const parts = timeStr.split(':').map(s=>parseInt(s,10));
+    if(parts.length<2 || isNaN(parts[0]) || isNaN(parts[1])) return null;
+    return parts[0]*60 + parts[1];
+  }
+  function minutesToHhMm(mins) {
+    const h = Math.floor(mins/60);
+    const m = Math.round(mins%60);
+    return `${h}h ${m}m`;
+  }
+
+  // Duration calculation: given bedtime minutes and wake minutes, and date (night of)
+  function computeDuration(bedMin, wakeMin) {
+    // If wakeMin <= bedMin => woke next day
+    if(wakeMin <= bedMin) {
+      return (24*60 - bedMin) + wakeMin;
+    } else {
+      return wakeMin - bedMin;
+    }
+  }
+
+  // Stats helpers
+  function mean(arr) {
+    if(arr.length===0) return 0;
+    return arr.reduce((a,b)=>a+b,0)/arr.length;
+  }
+  function stddev(arr) {
+    if(arr.length===0) return 0;
+    const m = mean(arr);
+    const variance = arr.reduce((s,x)=>s + Math.pow(x-m,2),0)/arr.length;
+    return Math.sqrt(variance);
+  }
+
+  // Storage key
+  const KEY = 'sensecare_sleep_logs';
+
+  // Elements
+  const sleepDateEl = document.getElementById('sleepDate');
+  const bedTimeEl = document.getElementById('bedTime');
+  const wakeTimeEl = document.getElementById('wakeTime');
+  const refreshEl = document.getElementById('refresh');
+  const addLogBtn = document.getElementById('addLog');
+  const historyTbody = document.querySelector('#historyTable tbody');
+  const instant = document.getElementById('instant');
+  const statsBox = document.getElementById('stats');
+  const clearAllBtn = document.getElementById('clearAll');
+  const exportBtn = document.getElementById('exportCsv');
+
+  // Load existing
+  function loadLogs() {
+    const raw = localStorage.getItem(KEY) || '[]';
+    try {
+      return JSON.parse(raw);
+    } catch(e){ return []; }
+  }
+  function saveLogs(arr) {
+    localStorage.setItem(KEY, JSON.stringify(arr));
+  }
+
+  // Render history and stats
+  function renderAll() {
+    const logs = loadLogs();
+    historyTbody.innerHTML = '';
+    const durations = [];
+    logs.forEach((log, idx) => {
+      const tr = document.createElement('tr');
+      const dur = computeDuration(parseTimeToMinutes(log.bedTime), parseTimeToMinutes(log.wakeTime));
+      durations.push(dur);
+      tr.innerHTML = `<td>${log.date}</td>
+                      <td>${log.bedTime}</td>
+                      <td>${log.wakeTime}</td>
+                      <td>${minutesToHhMm(dur)}</td>
+                      <td>${log.refresh}</td>
+                      <td><button data-idx="${idx}" class="btn gray" style="padding:6px 8px;font-size:13px">Delete</button></td>`;
+      historyTbody.appendChild(tr);
+    });
+
+    // attach delete handlers
+    Array.from(historyTbody.querySelectorAll('button')).forEach(b=>{
+      b.addEventListener('click', (e)=>{
+        const i = parseInt(b.getAttribute('data-idx'),10);
+        const arr = loadLogs();
+        arr.splice(i,1);
+        saveLogs(arr);
+        renderAll();
+      });
+    });
+
+    // Stats
+    if(durations.length===0) {
+      statsBox.style.display = 'none';
+    } else {
+      statsBox.style.display = 'block';
+      const avg = mean(durations);
+      const sd = stddev(durations);
+      // Basic interpretation
+      const goalMin = 8*60;
+      let tip = '';
+      if(avg >= goalMin && sd <= 45) {
+        tip = 'Great — you have healthy average sleep and consistent schedule.';
+      } else if(avg >= 7*60 && avg < goalMin) {
+        tip = 'Decent average sleep. Try to improve consistency and aim for 7–8 hours nightly.';
+      } else if(avg < 7*60) {
+        tip = 'Short sleep on average. Try going to bed earlier and reduce late-night screen time.';
+      }
+      if(sd > 90) {
+        tip += ' Your sleep schedule is variable — aim for consistent bedtime/wake time.';
+      }
+      statsBox.innerHTML = `<strong>Average sleep:</strong> ${minutesToHhMm(avg)} &nbsp;&nbsp; <strong>Consistency (std):</strong> ${Math.round(sd)} min<br/><p class="small">${tip}</p>`;
+    }
+  }
+
+  // Add a log
+  addLogBtn.addEventListener('click', ()=>{
+    const date = sleepDateEl.value;
+    const bed = bedTimeEl.value;
+    const wake = wakeTimeEl.value;
+    const refresh = parseInt(refreshEl.value||0,10);
+
+    if(!date || !bed || !wake) {
+      alert('Please fill date, bedtime and wake time.');
+      return;
+    }
+    const bedMin = parseTimeToMinutes(bed);
+    const wakeMin = parseTimeToMinutes(wake);
+    if(bedMin === null || wakeMin === null) {
+      alert('Invalid time format.');
+      return;
+    }
+
+    const dur = computeDuration(bedMin, wakeMin);
+    // show instant feedback
+    instant.style.display = 'block';
+    instant.innerHTML = `<strong>Recorded:</strong> ${date} — ${bed} → ${wake} &nbsp;&nbsp; <strong>Duration:</strong> ${minutesToHhMm(dur)}<br/><p class="small">Refresh score: ${refresh}/10</p>`;
+    // store
+    const arr = loadLogs();
+    arr.unshift({date, bedTime: bed, wakeTime: wake, refresh});
+    saveLogs(arr);
+    // clear inputs except date
+    // sleepDateEl.value = ''; bedTimeEl.value=''; wakeTimeEl.value=''; refreshEl.value=6;
+    renderAll();
+  });
+
+  // Clear all
+  clearAllBtn.addEventListener('click', ()=>{
+    if(confirm('Clear all saved sleep logs?')) {
+      localStorage.removeItem(KEY);
+      renderAll();
+      instant.style.display = 'none';
+    }
+  });
+
+  // Export CSV
+  exportBtn.addEventListener('click', ()=>{
+    const arr = loadLogs();
+    if(arr.length===0){ alert('No logs to export.'); return; }
+    const header = ['date','bedTime','wakeTime','duration_min','refresh'];
+    const rows = arr.map(r=>{
+      const dur = computeDuration(parseTimeToMinutes(r.bedTime), parseTimeToMinutes(r.wakeTime));
+      return [r.date, r.bedTime, r.wakeTime, dur, r.refresh];
+    });
+    const csv = [header.join(','), ...rows.map(r=>r.join(','))].join('\n');
+    const blob = new Blob([csv], {type: 'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'sleep_logs.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // Initialize date default to today
+  const today = new Date().toISOString().slice(0,10);
+  sleepDateEl.value = today;
+  renderAll();
+})();
+</script>
+</body>
+</html>

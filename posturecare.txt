@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PostureCare — Calibrated Tracker</title>
+  <style>
+    body {
+      text-align: center;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+      background: #f4f9ff;
+    }
+    video, canvas {
+      border-radius: 12px;
+      border: 2px solid #ddd;
+      width: 480px;
+      max-width: 90vw;
+    }
+    h1 { color: #1d4ed8; }
+    #status {
+      margin-top: 15px;
+      font-weight: bold;
+      font-size: 18px;
+    }
+    .good { color: #10b981; }
+    .bad { color: #ef4444; }
+    .btn {
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-weight: bold;
+      cursor: pointer;
+      margin: 8px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧍‍♂️ PostureCare</h1>
+  <p>AI-powered posture monitor using your webcam. Sit straight once and calibrate.</p>
+
+  <video id="webcam" autoplay playsinline muted></video>
+  <canvas id="output"></canvas>
+
+  <div id="status">Loading model...</div>
+  <button id="calibrate" class="btn">Calibrate (Sit Straight)</button>
+  <button id="toggle" class="btn">Start Detection</button>
+
+  <div style="margin-top:10px;font-size:14px;color:#555">
+    Your camera feed stays local — nothing is uploaded or recorded.
+  </div>
+
+  <div style="margin-top:15px">
+    <a href="index.html" style="text-decoration:none;color:#2563eb">⬅ Back to Home</a>
+  </div>
+
+  <!-- TensorFlow.js & MoveNet -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.20.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+
+  <script>
+    let detector, video, canvas, ctx, running = false, baseline = null;
+
+    async function init() {
+      video = document.getElementById("webcam");
+      canvas = document.getElementById("output");
+      ctx = canvas.getContext("2d");
+
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      video.srcObject = stream;
+
+      await new Promise(res => video.onloadedmetadata = res);
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      detector = await poseDetection.createDetector(
+        poseDetection.SupportedModels.MoveNet,
+        { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING }
+      );
+
+      document.getElementById("status").textContent = "Model loaded. Ready to calibrate.";
+    }
+
+    function midpoint(p1, p2) {
+      return { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+    }
+
+    async function getPostureData() {
+      const poses = await detector.estimatePoses(video);
+      if (poses.length === 0) return null;
+
+      const kp = poses[0].keypoints;
+      const leftEar = kp.find(k => k.name === "left_ear");
+      const rightEar = kp.find(k => k.name === "right_ear");
+      const leftShoulder = kp.find(k => k.name === "left_shoulder");
+      const rightShoulder = kp.find(k => k.name === "right_shoulder");
+
+      if (leftEar && rightEar && leftShoulder && rightShoulder) {
+        const midEar = midpoint(leftEar, rightEar);
+        const midShoulder = midpoint(leftShoulder, rightShoulder);
+
+        return {
+          earY: midEar.y,
+          shoulderY: midShoulder.y,
+          verticalGap: Math.abs(midEar.y - midShoulder.y),
+          midEar, midShoulder
+        };
+      }
+      return null;
+    }
+
+    async function detect() {
+      if (!running) return;
+      const data = await getPostureData();
+      if (data) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "red";
+        ctx.fillRect(data.midEar.x - 3, data.midEar.y - 3, 6, 6);
+        ctx.fillRect(data.midShoulder.x - 3, data.midShoulder.y - 3, 6, 6);
+
+        const statusEl = document.getElementById("status");
+        if (!baseline) {
+          statusEl.textContent = "⚙️ Please calibrate first by sitting straight and clicking Calibrate.";
+          statusEl.className = "";
+        } else {
+          const diff = data.verticalGap - baseline;
+          if (diff < 15) {
+            statusEl.textContent = "✅ Good posture — keep it up!";
+            statusEl.className = "good";
+          } else {
+            statusEl.textContent = "⚠️ Poor posture — you're slouching!";
+            statusEl.className = "bad";
+          }
+        }
+      }
+      requestAnimationFrame(detect);
+    }
+
+    document.getElementById("calibrate").addEventListener("click", async () => {
+      const data = await getPostureData();
+      if (data) {
+        baseline = data.verticalGap;
+        document.getElementById("status").textContent = "✅ Calibrated! Now start detection.";
+      } else {
+        document.getElementById("status").textContent = "❌ Unable to detect posture. Try again.";
+      }
+    });
+
+    document.getElementById("toggle").addEventListener("click", () => {
+      running = !running;
+      const btn = document.getElementById("toggle");
+      if (running) {
+        btn.textContent = "Stop Detection";
+        detect();
+      } else {
+        btn.textContent = "Start Detection";
+      }
+    });
+
+    init();
+  </script>
+</body>
+</html>
